@@ -1,0 +1,5 @@
+{
+  "name": "FinanceInsight AI",
+  "description": "An intelligent financial analytics platform that ingests unstructured data from Baidu Netdisk, processes it using multimodal AI, and delivers structured financial insights and architectural documentation.",
+  "requestFramePermissions": []
+}
