@@ -149,71 +149,107 @@ def setup_rag_pipeline(doc_path):
     return query_engine`
   },
   {
-    title: "6. 快速启动与部署 (Deployment Guide)",
+    title: "6. 生产环境部署 (Docker Full Enterprise)",
     content: `
-本系统支持 Docker 容器化部署，包含 React 前端、FastAPI 后端和 Milvus 数据库。
+为了获得完整的系统功能（包括百度网盘爬虫、GPU 加速的 Whisper 语音转写、本地 Milvus 向量数据库），必须使用 Docker 进行私有化部署。
 
-**前提条件：**
-1. 获取 Google Gemini API Key (https://aistudio.google.com/).
-2. 安装 Docker 和 Docker Compose.
+**系统组件拓扑：**
+1. **Frontend:** React + Vite (端口 3000)
+2. **Backend:** FastAPI + Python 3.10 (端口 8000)
+3. **Task Queue:** Celery + Redis (异步处理视频/爬虫任务)
+4. **Vector DB:** Milvus Standalone (端口 19530)
 
-**步骤 1: 配置环境变量**
-创建 \`.env\` 文件：
-\`\`\`bash
-# .env file
-API_KEY=your_gemini_api_key_here
-MILVUS_HOST=milvus
-REDIS_HOST=redis
-\`\`\`
+**部署步骤：**
 
-**步骤 2: 启动服务**
-使用 Docker Compose 一键启动：
-\`\`\`bash
-docker-compose up -d --build
-\`\`\`
+1. **环境准备：**
+   确保服务器已安装 Docker Engine 和 NVIDIA Container Toolkit (如需 GPU 加速)。
 
-**步骤 3: 访问应用**
-*   Web 前端: http://localhost:3000
-*   API 文档: http://localhost:8000/docs
-*   Milvus 控制台: http://localhost:8080 (如果配置了 Attu)
+2. **配置环境变量 (.env)：**
+   \`\`\`bash
+   GEMINI_API_KEY=your_key_here
+   MILVUS_URI=tcp://milvus:19530
+   REDIS_URL=redis://redis:6379/0
+   \`\`\`
 
-**前端本地开发 (可选):**
-如果您只想运行这个演示前端：
-1. \`npm install\`
-2. \`npm run dev\`
-3. 在浏览器打开页面，进入"系统设置"，填入您的 API Key。
+3. **启动集群：**
+   \`\`\`bash
+   docker-compose up -d --build
+   \`\`\`
+
+4. **验证服务：**
+   - 前端访问: http://localhost:3000
+   - 后端 Swagger API: http://localhost:8000/docs
+   - 检查 GPU 状态: \`docker exec -it backend nvidia-smi\`
 `,
     language: "yaml",
-    code: `version: '3.8'
+    code: `version: '3.9'
 
 services:
-  # 后端 API 服务
-  finance-backend:
-    image: python:3.10-slim
-    volumes:
-      - ./backend:/app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
-    environment:
-      - API_KEY=\${API_KEY}
-    depends_on:
-      - milvus
-
-  # 前端 UI 服务 (Nginx)
-  finance-frontend:
+  # 1. Web 前端服务
+  frontend:
     build: 
       context: ./frontend
-      dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile
     ports:
       - "3000:80"
     depends_on:
-      - finance-backend
+      - backend
+    restart: always
 
-  # 向量数据库
+  # 2. Python 后端与 AI 引擎
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./data:/app/data  # 挂载数据卷以持久化网盘下载文件
+    environment:
+      - API_KEY=\${GEMINI_API_KEY}
+      - MILVUS_URI=tcp://milvus:19530
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      - milvus
+      - redis
+
+  # 3. 向量数据库 (Milvus Standalone)
   milvus:
     image: milvusdb/milvus:v2.3.0
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - ./milvus_volumes:/var/lib/milvus
     ports:
       - "19530:19530"
-    volumes:
-      - ./milvus_data:/var/lib/milvus`
+    depends_on:
+      - etcd
+      - minio
+
+  # 4. 任务队列缓存
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+  # --- Milvus 依赖项 (Etcd & MinIO) ---
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls=http://0.0.0.0:2379
+
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    command: minio server /data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin`
   }
 ];
