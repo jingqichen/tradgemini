@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, Link as LinkIcon, HardDrive, RefreshCw, Upload, FileUp, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { KnowledgeFile } from '../types';
 
 interface QueueItem {
   id: string;
@@ -10,11 +11,15 @@ interface QueueItem {
   source: 'Local' | 'Netdisk';
 }
 
-export const IngestionView: React.FC = () => {
+interface IngestionViewProps {
+  onIngest: (file: KnowledgeFile) => void;
+}
+
+export const IngestionView: React.FC<IngestionViewProps> = ({ onIngest }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([
-    { id: '1', name: 'BABA_Q3_Transcript.pdf', status: 'OCR 处理中', progress: 85, color: 'bg-emerald-500', source: 'Netdisk' },
-    { id: '2', name: 'NVDA_Analysis_Video.mp4', status: 'Whisper 语音转写中', progress: 42, color: 'bg-blue-500', source: 'Netdisk' }
+    { id: '1', name: 'BABA_Q3_Transcript.pdf', status: '已完成 (Completed)', progress: 100, color: 'bg-slate-600', source: 'Netdisk' },
+    { id: '2', name: 'NVDA_Analysis_Video.mp4', status: '已完成 (Completed)', progress: 100, color: 'bg-slate-600', source: 'Netdisk' }
   ]);
 
   // 模拟进度条自动增长
@@ -49,27 +54,83 @@ export const IngestionView: React.FC = () => {
 
     // 模拟网络请求延迟
     setTimeout(() => {
-      const newFiles: QueueItem[] = [
+      const timestamp = new Date().toISOString().split('T')[0];
+      
+      // 1. Add to visual queue
+      const newFilesQueue: QueueItem[] = [
         { id: Date.now().toString(), name: '2024_Macro_Strategy_Report.pdf', status: '等待处理', progress: 0, color: 'bg-purple-500', source: 'Netdisk' },
         { id: (Date.now()+1).toString(), name: 'CEO_Interview_CCTV.mp4', status: '等待处理', progress: 0, color: 'bg-blue-500', source: 'Netdisk' }
       ];
-      setQueue(prev => [...newFiles, ...prev]);
+      setQueue(prev => [...newFilesQueue, ...prev]);
+      
+      // 2. Add to Global Knowledge Base (Simulating instant parsing for demo)
+      // In a real app, this would happen after progress hits 100%
+      const newKnowledgeFiles: KnowledgeFile[] = [
+        {
+          id: `nd-${Date.now()}`,
+          name: '2024_Macro_Strategy_Report.pdf',
+          type: 'PDF',
+          date: timestamp,
+          summary: '2024年宏观策略展望 - 自动同步',
+          content: `[Source: 2024_Macro_Strategy_Report.pdf]
+          Core Inflation: Stabilizing at 2.1%.
+          GDP Forecast: Global growth revised to 2.9%.
+          Market Sentiment: Risk-on sentiment returning to emerging markets.
+          Recommendation: Increase exposure to Consumer Discretionary.`
+        },
+        {
+          id: `nd-${Date.now()+1}`,
+          name: 'CEO_Interview_CCTV.mp4',
+          type: 'Video',
+          date: timestamp,
+          summary: 'CCTV 财经频道 CEO 专访',
+          content: `[Source: CEO_Interview_CCTV.mp4]
+          Interviewer: How are the new tariffs affecting your supply chain?
+          CEO: We have diversified our manufacturing to Vietnam and Mexico. The impact is minimal.
+          Interviewer: What about the new product line?
+          CEO: Pre-orders have exceeded expectations by 40%. We are ramping up production.`
+        }
+      ];
+      
+      newKnowledgeFiles.forEach(f => onIngest(f));
+
       setIsSyncing(false);
     }, 2000);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files).map((file, idx) => ({
-        id: `local-${Date.now()}-${idx}`,
+      const file = e.target.files[0];
+      const timestamp = new Date().toISOString().split('T')[0];
+
+      // 1. Visual Queue
+      const newFileQueue: QueueItem = {
+        id: `local-${Date.now()}`,
         name: file.name,
         status: '等待处理 (Pending)',
         progress: 0,
         color: 'bg-emerald-500',
-        source: 'Local' as const
-      }));
+        source: 'Local'
+      };
+      setQueue(prev => [newFileQueue, ...prev]);
+
+      // 2. Global Knowledge Base (Simulated)
+      const newKnowledgeFile: KnowledgeFile = {
+        id: `loc-${Date.now()}`,
+        name: file.name,
+        type: 'Report',
+        date: timestamp,
+        summary: '本地上传文件 (解析中...)',
+        content: `[Source: ${file.name}]
+        (Simulated Content for ${file.name})
+        This file contains key financial data uploaded by the user.
+        Revenue: Increasing.
+        Costs: Stable.
+        Outlook: Positive.`
+      };
       
-      setQueue(prev => [...newFiles, ...prev]);
+      // Delay slightly to simulate upload
+      setTimeout(() => onIngest(newKnowledgeFile), 500);
     }
   };
 

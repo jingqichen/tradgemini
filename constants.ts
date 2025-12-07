@@ -1,154 +1,140 @@
 import { DocSection } from './types';
 
-export const SYSTEM_INSTRUCTION = `你是由 "FinanceInsight AI" 开发的顶尖金融分析师和AI架构助手。
-你的目标是基于非结构化数据提供深度的金融市场洞察，并在被问及时解释你底层的技术架构（Python, RAG, Whisper 等）。
-在分析金融文本时：
-1. 提取核心投资论点（Investment Theses）。
-2. 识别买入/卖出信号及其推理依据。
-3. 重点提示风险因素（监管、市场、运营）。
-4. 使用专业的金融术语（如 EBITDA, MACD, Alpha/Beta, 估值中枢等）。
-避免幻觉；如果数据缺失，请明确说明。请始终使用中文回答。`;
+// --- Phase 1: Ingestion & Structuring (Gemini Role) ---
+export const ANALYST_PERSONA_PROMPT = `
+## Role
+你是由高盛、桥水基金顶级分析师组成的AI决策委员会。你的任务是根据我提供的上下文（视频字幕、会议纪要、研报文档），进行深度金融分析。
+
+## Context
+数据来源包括：行业专家访谈视频、券商深度研报、市场路演记录。内容可能包含口语化表达，请自动修正并提取核心逻辑。
+
+## Workflow
+请忽略无关的闲聊，专注于以下五个维度进行深挖，并输出为结构化的 Markdown 报告：
+
+1. **宏观策略 (Macro)**: 提取关于GDP、利率、通胀、央行政策（Fed/人行）的明确观点。
+2. **行业轮动 (Sector Rotation)**: 识别当前处于"复苏/过热/滞胀/衰退"哪个周期的行业，挖掘被低估的细分赛道。
+3. **资金流向 (Capital Flow)**: 提取关于北向资金、机构席位、主力资金介入迹象的描述。
+4. **技术分析 (Technical)**: 提取文本中提到的关键点位（支撑位/压力位）、形态（如头肩底）、趋势指标（MACD/KDJ）描述。
+5. **基本面 (Fundamentals)**: 提取个股或行业的估值水平（PE/PB）、业绩增速、护城河分析。
+
+## Output Format
+请严格按照以下格式输出：
+
+### 1. 宏观风向标
+*   **核心判断**: [例如：看多/看空/震荡]
+*   **关键因子**: [列出影响判断的政策或数据]
+
+### 2. 行业机会扫描
+| 行业/赛道 | 推荐逻辑 | 风险点 | 周期阶段 |
+| :--- | :--- | :--- | :--- |
+| [例如: AI光模块] | [逻辑描述] | [风险] | [成长期] |
+
+### 3. 个股/标的深度分析
+*   **标的名称**: [股票代码]
+*   **基本面亮点**: ...
+*   **技术面信号**: [从文本中提取的分析，如：回踩20日线]
+*   **资金面动作**: ...
+
+### 4. 交易计划建议
+*   **买入区间**: ...
+*   **止损位**: ...
+*   **目标价**: ...
+`;
+
+// --- Phase 2: Logic & Red Teaming (DeepSeek Role Simulation) ---
+// Since we are client-side, we simulate DeepSeek's reasoning capability via Gemini using a specific persona.
+export const DEEP_LOGIC_PROMPT = `
+## Role
+你现在是基金公司的首席风控官（CRO）和投资总监（CIO）。你以逻辑严密、批判性强、善于发现逻辑漏洞著称（模拟 DeepSeek-R1 的深度推理模式）。
+
+## Task
+请对上一阶段分析师提交的《投资分析报告》进行无情的“红队测试”（Red Teaming）：
+
+1. **寻找逻辑断层**：报告中是否有“因为 A 所以 B”，但实际上 A 推导不出 B 的情况？
+2. **数据源质疑**：报告中引用的数据是否可能滞后？（例如引用了上个月的财报，但没考虑本周的监管新规）。
+3. **情绪剔除**：文本中是否有过于乐观的主观词汇（如“暴涨”、“必买”）？请剔除情绪，还原客观事实。
+4. **最终决策打分**：
+   对每一个推荐标的进行打分（0-100分）：
+   - >80分：强烈建议买入（逻辑闭环，风险可控）
+   - 50-80分：观察（有瑕疵，需等待更好价格）
+   - <50分：否决（逻辑有硬伤）
+
+请给出最终的 **《模拟实盘操作指令单》**。
+`;
+
+export const SYSTEM_INSTRUCTION = `你是由 "FinanceInsight AI" 开发的顶尖金融分析师。
+你的核心工作流是：
+1. **Gemini 模式 (读取)**: 快速阅读大量非结构化数据，提取宏观、行业、个股信息。
+2. **DeepSeek 模式 (推理)**: 对提取的信息进行逻辑推演、质疑和红队测试。
+
+在回答用户问题时，请先引用原文数据，然后进行逻辑反思。始终使用 Markdown 格式渲染表格和重点。`;
 
 export const ARCHITECTURE_DOCS: DocSection[] = [
   {
-    title: "1. 技术栈选型 (Tech Stack)",
+    title: "1. 核心架构设计 (Core Design)",
     content: `
-**核心理念：** 以 Python 为核心的微服务架构，优先考虑高吞吐量的非结构化数据处理和低延迟的推理能力。
+**核心架构思路：双脑协同 (Dual-Brain Synergy)**
 
-*   **编排与应用层：**
-    *   **FastAPI:** 选择它是因为其高性能的异步 I/O 能力，对于处理长时间运行的推理任务和实时更新的 WebSocket 连接至关重要。
-    *   **React (TypeScript):** 构建类型安全、响应迅速的现代化前端应用。
-*   **AI 与数据处理：**
-    *   **LlamaIndex:** 在数据摄取管道方面优于 LangChain。它提供了优化的“索引”结构用于 RAG，特别擅长处理分层文档摘要。
-    *   **OpenAI Whisper (Faster-Whisper):** ASR 的行业标准。我们使用 CTranslate2 后端 (faster-whisper) 在 GPU 上实现 4 倍的推理加速。
-    *   **PaddleOCR:** 在处理中文金融文档（如复杂的表格、竖排文本）时，性能优于 Tesseract。
-*   **存储层：**
-    *   **Milvus / Qdrant:** 向量数据库，用于管理数百万级的文档 Embedding。
-    *   **PostgreSQL:** 用于存储事务性元数据和用户管理信息。
+为了实现对 A 股大盘和个股走势的精准研判，系统采用了分层处理架构：
+
+1.  **信息摄取者 (The Reader): Google Gemini 1.5 Pro**
+    *   **职责**: 利用其 1M+ Token 的超长上下文窗口，吞吐数十万字的研报、会议纪要和视频字幕。
+    *   **任务**: 结构化提取宏观数据、行业逻辑、技术面信号。
+    *   **输出**: 标准化的 JSON/Markdown 中间态数据。
+
+2.  **逻辑分析师 (The Thinker): DeepSeek R1 (Simulated/API)**
+    *   **职责**: 模拟深度推理模型，对提取的数据进行“红队测试 (Red Teaming)”。
+    *   **任务**: 寻找逻辑断层，剔除情绪化表达，进行博弈论视角的资金流向推演。
+    *   **输出**: 最终的投资决策打分与实盘操作指令。
     `
   },
   {
-    title: "2. 系统架构与数据流 (Architecture)",
+    title: "2. 数据流处理 (Pipeline)",
     content: `
-**数据处理流水线 (Pipeline)：**
+**从网盘到决策的完整链路：**
 
-1.  **摄取层 (Ingestion):** 
-    *   Cron 定时任务触发 \`bypy\` 或 Selenium 机器人扫描受监控的百度网盘文件夹。
-    *   用户通过 Web 界面上传的本地文件。
-    *   文件被下载/暂存至对象存储 (MinIO/S3)。
-2.  **ETL 与 清洗:**
-    *   **视频/音频:** FFMpeg 提取音频 -> Whisper ASR -> 文本 + 时间戳。
-    *   **文档:** PyMuPDF/PdfPlumber 提取文本 + 表格 -> 清洗后的 Markdown。
-3.  **索引 (Indexing / RAG):**
-    *   文本切块 (Chunking)，滑动窗口 512 token。
-    *   使用 \`text-embedding-3-small\` 或 BGE-M3 (多语言) 进行 Embedding。
-    *   存入向量数据库 (Vector DB)。
-4.  **推理层 (Inference):**
-    *   用户查询 -> 检索 (Top-K) -> 重排序 (Cohere Rerank) -> LLM 上下文窗口 -> 生成回答。
+1.  **Ingestion (Python/Celery):**
+    *   监听百度网盘/本地目录 -> 自动下载。
+    *   OCR (Paddle) 解析 PDF 表格。
+    *   Whisper (Large-v3) 提取视频会议字幕。
+2.  **Structuring (Gemini):**
+    *   System Prompt: "Role: Global Financial Analyst".
+    *   Action: 提取 [宏观, 行业, 资金, 技术, 基本面] 五维数据。
+3.  **Reasoning (DeepSeek Logic):**
+    *   System Prompt: "Role: Chief Risk Officer (CRO)".
+    *   Action: 矛盾检测 (政策 vs 资金)、预期差分析、风险压力测试。
+4.  **Presentation (React):**
+    *   渲染交互式研报，展示胜率赔率计算。
     `
   },
   {
-    title: "3. 模块 A: 数据摄取 (Baidu Netdisk)",
-    content: "我们要采用混合策略。优先尝试 API/bypy。如果被反爬策略拦截，自动回退到 Selenium 无头浏览器自动化。",
+    title: "3. 关键 Prompt 设计 (Prompt Engineering)",
+    content: "系统内置了多阶段 Prompt 链，确保输出的专业性。",
     language: "python",
-    code: `import os
-from bypy import ByPy
-from selenium import webdriver
-
-class NetdiskIngestor:
-    def __init__(self, save_path="./data/raw"):
-        self.bp = ByPy()
-        self.save_path = save_path
-        os.makedirs(save_path, exist_ok=True)
-
-    def sync_via_api(self, remote_path):
-        """Standard sync using unofficial API wrapper"""
-        try:
-            print(f"Attempting API sync from {remote_path}...")
-            self.bp.list(remote_path)
-            self.bp.download(remote_path, self.save_path)
-            return True
-        except Exception as e:
-            print(f"API Limit reached: {e}")
-            return False
-
-    def fallback_selenium_download(self, share_link, password):
-        """Fallback for strict anti-scraping"""
-        options = webdriver.ChromeOptions()
-        options.add_argument('--headless') 
-        # ... setup download prefs ...
-        driver = webdriver.Chrome(options=options)
-        
-        try:
-            driver.get(share_link)
-            # Logic to input password and click download
-            # This requires constant maintenance as DOM changes
-            pass
-        finally:
-            driver.quit()`
-  },
-  {
-    title: "3. 模块 B: 内容提取 (ASR)",
-    content: "使用 Faster-Whisper 对金融会议视频进行高效的 GPU 加速转录。",
-    language: "python",
-    code: `from faster_whisper import WhisperModel
-import datetime
-
-class VideoProcessor:
-    def __init__(self, model_size="large-v3"):
-        # Run on GPU with FP16
-        self.model = WhisperModel(model_size, device="cuda", compute_type="float16")
-
-    def transcribe(self, audio_path):
-        segments, info = self.model.transcribe(audio_path, beam_size=5)
-        
-        print(f"Detected language '{info.language}' with probability {info.language_probability}")
-
-        transcript = []
-        for segment in segments:
-            # Format timestamp [00:10 -> 00:15]
-            start = str(datetime.timedelta(seconds=int(segment.start)))
-            end = str(datetime.timedelta(seconds=int(segment.end)))
-            text = f"[{start} -> {end}] {segment.text}"
-            transcript.append(text)
-            
-        return "\\n".join(transcript)`
-  },
-  {
-    title: "3. 模块 C: AI 核心 (System Prompt & RAG)",
-    content: "提示工程（Prompt Engineering）的核心在于角色设定，以减少金融语境下的幻觉。",
-    language: "python",
-    code: `from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, PromptTemplate
-
-# 1. Specialized Financial Prompt
-FINANCE_SYSTEM_PROMPT = """
-You are a Senior Financial Analyst with 20 years of experience in equity research.
-Your task is to analyze the provided context (transcripts/reports) and output a structured memo.
-
-Strict Rules:
-- If mentioning specific metrics (PE, PEG, ROE), cite the source paragraph.
-- Distinguish between Management Guidance (optimistic) and Analyst Estimates (conservative).
-- Identify Key Risks: Regulatory, Forex, Supply Chain.
-- Output Format: JSON with keys 'summary', 'buy_thesis', 'risks', 'price_targets'.
-
-Context:
-{context_str}
-
-Query:
-{query_str}
+    code: `
+# 阶段一：Gemini 信息提取
+PROMPT_1 = """
+Role: 全局金融分析师
+Task: 忽略闲聊，提取以下维度的核心逻辑：
+1. 宏观策略 (利率/通胀/政策)
+2. 行业轮动 (复苏/过热/滞胀/衰退)
+3. 资金流向 (北向/主力)
+4. 技术分析 (点位/形态)
+Output: Markdown Table
 """
 
-def setup_rag_pipeline(doc_path):
-    documents = SimpleDirectoryReader(doc_path).load_data()
-    index = VectorStoreIndex.from_documents(documents)
-    
-    # Customizing the query engine with our prompt
-    qa_template = PromptTemplate(FINANCE_SYSTEM_PROMPT)
-    query_engine = index.as_query_engine(text_qa_template=qa_template)
-    
-    return query_engine`
+# 阶段二：DeepSeek 逻辑对抗
+PROMPT_2 = """
+Role: 首席风控官 (CRO) - DeepSeek Style
+Task: 对上述报告进行红队测试：
+1. 寻找逻辑断层 (A推不出B)
+2. 质疑数据时效性
+3. 剔除情绪化词汇
+Output: 最终决策打分 (0-100)
+"""
+    `
   },
-  {
+   {
     title: "6. 生产环境部署 (Docker Full Enterprise)",
     content: `
 为了获得完整的系统功能（包括百度网盘爬虫、GPU 加速的 Whisper 语音转写、本地 Milvus 向量数据库），必须使用 Docker 进行私有化部署。

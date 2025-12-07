@@ -35,3 +35,13 @@ export interface DocSection {
   code?: string;
   language?: string;
 }
+
+// New interface for shared file data
+export interface KnowledgeFile {
+  id: string;
+  name: string;
+  type: 'PDF' | 'Video' | 'Report' | 'Audio';
+  date: string;
+  summary: string;
+  content: string; // The parsed text content used for RAG
+}

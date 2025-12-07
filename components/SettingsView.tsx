@@ -1,87 +1,126 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Save, ShieldCheck, ExternalLink, Eye, EyeOff } from 'lucide-react';
+import { ShieldCheck, Key, Save, Server, AlertTriangle } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
-  const [apiKey, setApiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [deepSeekKey, setDeepSeekKey] = useState('');
+  const [geminiStatus, setGeminiStatus] = useState<'active' | 'missing'>('missing');
 
   useEffect(() => {
-    const storedKey = localStorage.getItem('GEMINI_API_KEY');
-    if (storedKey) setApiKey(storedKey);
+    // Load DeepSeek key from local storage
+    const storedDsKey = localStorage.getItem('DEEPSEEK_API_KEY');
+    if (storedDsKey) setDeepSeekKey(storedDsKey);
+
+    // Check environment variable for Gemini
+    if (process.env.API_KEY) {
+      setGeminiStatus('active');
+    }
   }, []);
 
   const handleSave = () => {
-    if (apiKey.trim()) {
-      localStorage.setItem('GEMINI_API_KEY', apiKey.trim());
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } else {
-        localStorage.removeItem('GEMINI_API_KEY');
-    }
+    localStorage.setItem('DEEPSEEK_API_KEY', deepSeekKey);
+    // Visual feedback could be added here
+    alert('DeepSeek API Key 已保存 (Saved)');
   };
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-300">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-8">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 shadow-lg">
         <h2 className="text-2xl font-bold text-slate-100 mb-2 flex items-center gap-2">
-            <Key className="text-emerald-500" />
-            API 密钥配置
+            <ShieldCheck className="text-emerald-500" />
+            系统设置 (System Configuration)
         </h2>
         <p className="text-slate-400 text-sm mb-6">
-            为了激活 AI 分析功能，请配置您的 Google Gemini API Key。您的密钥仅存储在本地浏览器中，绝不会发送到第三方服务器。
+            配置 AI 模型接口密钥。FinanceInsight AI 采用双核架构：Gemini 负责数据摄取，DeepSeek 负责逻辑推理。
         </p>
 
-        <div className="space-y-4">
-            <label className="block text-sm font-medium text-slate-300">Gemini API Key</label>
-            <div className="relative">
-                <input
-                    type={showKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors pr-12 font-mono"
-                    placeholder="AIzaSy..."
-                />
-                <button 
-                    onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
-                >
-                    {showKey ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
+        <div className="space-y-6">
+            {/* Gemini Config (Environment Variable) */}
+            <div className="bg-slate-950/50 p-6 rounded-lg border border-slate-800 relative overflow-hidden group">
+                <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
+                            <Server size={20} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-200">Google Gemini API Key</label>
+                            <span className="text-xs text-slate-500">Core Engine (Ingestion & Context)</span>
+                        </div>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                        geminiStatus === 'active' 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                        : 'bg-red-500/10 text-red-400 border-red-500/20'
+                    }`}>
+                        {geminiStatus === 'active' ? 'Active / Connected' : 'Missing Configuration'}
+                    </div>
+                </div>
+                
+                <div className="relative">
+                    <input 
+                        type="text" 
+                        value={geminiStatus === 'active' ? "**************************************" : ""}
+                        disabled
+                        className="w-full bg-slate-900 border border-slate-700 text-slate-500 rounded-lg px-4 py-3 font-mono text-sm cursor-not-allowed opacity-70"
+                        placeholder="Not Configured"
+                    />
+                    <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                        <AlertTriangle size={12} className="text-yellow-500" />
+                        <span>Security Enforced: This key is managed via <code className="text-emerald-400 bg-slate-900 px-1 rounded">process.env.API_KEY</code> environment variable.</span>
+                    </div>
+                </div>
             </div>
-            
-            <div className="flex justify-between items-center">
-                <a 
-                    href="https://aistudio.google.com/app/apikey" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
-                >
-                    <ExternalLink size={14} />
-                    获取免费的 Gemini API Key
-                </a>
-                <button 
-                    onClick={handleSave}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-all ${
-                        saved 
-                        ? 'bg-emerald-600 text-white' 
-                        : 'bg-slate-100 text-slate-900 hover:bg-white'
-                    }`}
-                >
-                    {saved ? <ShieldCheck size={18} /> : <Save size={18} />}
-                    {saved ? '已保存' : '保存设置'}
-                </button>
+
+            {/* DeepSeek Config (Writable) */}
+            <div className="bg-slate-950/50 p-6 rounded-lg border border-slate-800 relative overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-purple-500/10 rounded-lg text-purple-500">
+                            <Key size={20} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-200">DeepSeek API Key</label>
+                            <span className="text-xs text-slate-500">Reasoning Engine (Logic & Red Teaming)</span>
+                        </div>
+                    </div>
+                    <div className="px-3 py-1 rounded-full text-xs font-medium border bg-slate-800 text-slate-400 border-slate-700">
+                        Optional / User Managed
+                    </div>
+                </div>
+
+                <div className="flex gap-2">
+                    <input 
+                        type="password" 
+                        value={deepSeekKey}
+                        onChange={(e) => setDeepSeekKey(e.target.value)}
+                        className="flex-1 bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-4 py-3 font-mono text-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder-slate-600"
+                        placeholder="sk-..."
+                    />
+                    <button 
+                        onClick={handleSave}
+                        className="bg-purple-600 hover:bg-purple-500 text-white px-6 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-purple-900/20"
+                    >
+                        <Save size={18} />
+                        Save
+                    </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                    Used for the "Deep Research" pipeline. If left empty, the system will use Gemini to simulate DeepSeek's reasoning logic.
+                </p>
             </div>
         </div>
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-8">
-         <h3 className="text-lg font-semibold text-slate-200 mb-4">关于部署</h3>
-         <div className="prose prose-invert text-sm text-slate-400">
-             <p>
-                 当前版本为浏览器端预览版 (Preview)。在生产环境中，API 调用应通过后端代理进行，以防止密钥泄露。
-                 完整的部署指南请参考 <span className="text-emerald-400 font-mono">系统架构 -> 部署指南</span> 章节。
-             </p>
+         <h3 className="text-lg font-semibold text-slate-200 mb-4">Deployment Info</h3>
+         <div className="grid grid-cols-2 gap-4 text-sm">
+             <div className="p-4 bg-slate-950 rounded-lg border border-slate-800">
+                 <span className="block text-slate-500 mb-1">Environment</span>
+                 <span className="font-mono text-emerald-400">Production (Vercel/Docker)</span>
+             </div>
+             <div className="p-4 bg-slate-950 rounded-lg border border-slate-800">
+                 <span className="block text-slate-500 mb-1">Model Pipeline</span>
+                 <span className="font-mono text-purple-400">Gemini 2.5 + DeepSeek R1</span>
+             </div>
          </div>
       </div>
     </div>
